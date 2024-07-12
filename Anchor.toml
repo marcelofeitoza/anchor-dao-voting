@@ -1,0 +1,18 @@
+[toolchain]
+
+[features]
+seeds = false
+skip-lint = false
+
+[programs.localnet]
+dao_voting = "9gvLmeAkDQzGjoLoJCCbEizicBYATkJSfD6pmVJzGKWS"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "/Users/marcelofeitoza/.config/solana/id.json"
+
+[scripts]
+test = "yarn run jest --preset ts-jest"
