@@ -9,7 +9,7 @@ use instructions::*;
 declare_id!("9gvLmeAkDQzGjoLoJCCbEizicBYATkJSfD6pmVJzGKWS");
 
 #[program]
-pub mod dao_voting {
+pub mod iron_throne_consensus {
     use super::*;
 
     pub fn create_proposal(

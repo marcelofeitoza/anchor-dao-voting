@@ -5,7 +5,7 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-dao_voting = "9gvLmeAkDQzGjoLoJCCbEizicBYATkJSfD6pmVJzGKWS"
+iron_throne_consensus = "9gvLmeAkDQzGjoLoJCCbEizicBYATkJSfD6pmVJzGKWS"
 
 [registry]
 url = "https://api.apr.dev"
