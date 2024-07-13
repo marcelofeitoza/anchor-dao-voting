@@ -5,7 +5,8 @@
     },
     "dependencies": {
         "@coral-xyz/anchor": "^0.29.0",
-        "@lightprotocol/stateless.js": "^0.4.4"
+        "@lightprotocol/stateless.js": "^0.4.4",
+        "@solana/spl-token": "^0.4.8"
     },
     "devDependencies": {
         "@types/bn.js": "^5.1.0",

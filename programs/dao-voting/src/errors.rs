@@ -16,4 +16,10 @@ pub enum ProposalErrorCode {
     OnlyCreatorCanFinalize,
     #[msg("Invalid voter account.")]
     InvalidVoterAccount,
+    #[msg("Reward division error.")]
+    RewardDivisionError,
+    #[msg("No voters.")]
+    NoVoters,
+    #[msg("Overflow.")]
+    Overflow,
 }

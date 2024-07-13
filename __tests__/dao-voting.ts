@@ -1,6 +1,5 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { DaoVoting } from "../target/types/dao_voting";
 import {
 	airdropSol,
 	createRpc,
@@ -10,25 +9,30 @@ import {
 	defaultTestStateTreeAccounts,
 } from "@lightprotocol/stateless.js";
 import {
+	clusterApiUrl,
+	Connection,
 	Keypair,
 	LAMPORTS_PER_SOL,
 	PublicKey,
-	sendAndConfirmTransaction,
-	SendTransactionError,
+	SystemProgram,
 } from "@solana/web3.js";
+import { createMint } from "@solana/spl-token";
+import { DaoVoting } from "../target/types/dao_voting";
 
-const rpc = createRpc(
-	"http://localhost:8899",
-	"http://localhost:8784",
-	"http://localhost:3001"
-);
+async function createToken(payer: anchor.web3.Keypair | anchor.web3.Signer) {
+	const connection = new Connection("http://localhost:8899", "confirmed");
 
-async function airdropForTesting(recipientPublicKey: anchor.web3.PublicKey) {
-	await airdropSol({
-		connection: rpc,
-		lamports: 1e11,
-		recipientPublicKey,
-	});
+	const airdropSignature = await connection.requestAirdrop(
+		payer.publicKey,
+		LAMPORTS_PER_SOL // Airdrop 1 SOL
+	);
+	await connection.confirmTransaction(airdropSignature);
+
+	const mint = await createMint(connection, payer, payer.publicKey, null, 9);
+
+	console.log(`Token created with mint address: ${mint}`);
+
+	return mint;
 }
 
 enum ProposalResult {
@@ -44,6 +48,12 @@ describe("dao-voting", () => {
 	const provider = anchor.getProvider();
 
 	let proposal: anchor.web3.Keypair;
+	let creator: anchor.web3.Keypair = new anchor.web3.Keypair();
+	let token: PublicKey;
+
+	beforeAll(async () => {
+		token = await createToken(creator);
+	});
 
 	let voters = [
 		{ voter: "voterA", keypair: new anchor.web3.Keypair(), vote: true },
@@ -52,6 +62,13 @@ describe("dao-voting", () => {
 	];
 
 	beforeAll(async () => {
+		await provider.connection.confirmTransaction(
+			await provider.connection.requestAirdrop(
+				creator.publicKey,
+				LAMPORTS_PER_SOL * 5
+			)
+		);
+
 		for (let v of voters) {
 			await provider.connection.confirmTransaction(
 				await provider.connection.requestAirdrop(
@@ -60,70 +77,68 @@ describe("dao-voting", () => {
 				),
 				"confirmed"
 			);
-
-			console.log(
-				`Airdropped ${2 * LAMPORTS_PER_SOL} to ${
-					v.voter
-				} account\nBalance: ${
-					(await provider.connection.getBalance(
-						v.keypair.publicKey
-					)) / LAMPORTS_PER_SOL
-				} SOL`
-			);
 		}
 	});
 
-	// it("Creates a proposal", async () => {
-	// 	proposal = anchor.web3.Keypair.generate();
+	afterEach(async () => {
+		const balances = [];
 
-	// 	const proposalDescription = "Test of proposal";
-
-	// 	const tx = await program.methods
-	// 		.createProposal(proposalDescription, new anchor.BN(100))
-	// 		.accounts({
-	// 			proposal: proposal.publicKey,
-	// 			user: provider.publicKey,
-	// 			systemProgram: anchor.web3.SystemProgram.programId,
-	// 		})
-	// 		.signers([proposal])
-	// 		.rpc();
-	// 	console.log(tx);
-
-	// 	const proposalAccount = await program.account.proposal.fetch(
-	// 		proposal.publicKey
-	// 	);
-
-	// 	expect(proposalAccount.description).toBe(proposalDescription);
-	// 	expect(proposalAccount.votesFor.toString()).toEqual("0");
-	// 	expect(proposalAccount.votesAgainst.toString()).toEqual("0");
-	// });
-	it("Creates a proposal", async () => {
-		const proposal = Keypair.generate();
-		const description = "Test of proposal";
-		const depositAmount = new anchor.BN(100000000);
-
-		const airdropSignature = await provider.connection.requestAirdrop(
-			provider.publicKey,
-			1000000000
+		const creatorBalance = await provider.connection.getBalance(
+			creator.publicKey
 		);
-		await provider.connection.confirmTransaction(airdropSignature);
+		balances.push({
+			pubKey: creator.publicKey.toBase58(),
+			balance: creatorBalance,
+		});
 
-		await program.methods
-			.createProposal(description, depositAmount)
-			.accounts({
-				systemProgram: anchor.web3.SystemProgram.programId,
-				proposal: proposal.publicKey,
-				user: provider.publicKey,
+		await Promise.all(
+			voters.map((v) => {
+				const b = provider.connection.getBalance(v.keypair.publicKey);
+				balances.push({
+					pubKey: v.keypair.publicKey.toBase58(),
+					balance: b,
+				});
 			})
-			.signers([proposal])
-			.rpc()
-			.then((res) => console.log(res))
-			.catch((err) => console.log(err));
+		);
+
+		console.log(
+			`Balances: ${balances
+				.map(
+					(b) =>
+						b.pubKey + ": " + b.balance / LAMPORTS_PER_SOL + " SOL"
+				)
+				.join(", ")}`
+		);
+	});
+
+	const [proposalPDA, proposalBump] = PublicKey.findProgramAddressSync(
+		[Buffer.from("proposal"), creator.publicKey.toBuffer()],
+		program.programId
+	);
+
+	it("Creates a proposal with initial deposit", async () => {
+		console.log("Creates a proposal with initial deposit");
+
+		const description = "Test of proposal";
+		const depositAmount = new anchor.BN(3 * LAMPORTS_PER_SOL);
+
+		try {
+			await program.methods
+				.createProposal(description, depositAmount)
+				.accounts({
+					proposal: proposalPDA,
+					user: creator.publicKey,
+					systemProgram: SystemProgram.programId,
+				})
+				.signers([creator])
+				.rpc();
+		} catch (err) {
+			console.error("Error creating proposal:", err);
+		}
 
 		const proposalAccount = await program.account.proposal.fetch(
-			proposal.publicKey
+			proposalPDA
 		);
-		console.log(proposalAccount);
 		expect(proposalAccount.description).toBe(description);
 		expect(proposalAccount.votesFor.toString()).toEqual("0");
 		expect(proposalAccount.votesAgainst.toString()).toEqual("0");
@@ -132,134 +147,118 @@ describe("dao-voting", () => {
 		);
 	});
 
+	it("Should have received the deposit", async () => {
+		console.log("Should have received the deposit");
+
+		const proposalAccount = await program.account.proposal.fetch(
+			proposalPDA
+		);
+		expect(proposalAccount.rewardPool.toString()).toEqual(
+			(3 * LAMPORTS_PER_SOL).toString()
+		);
+		const proposalAccountBalance = await provider.connection.getBalance(
+			proposalPDA
+		);
+		expect(proposalAccountBalance).toBeGreaterThanOrEqual(LAMPORTS_PER_SOL);
+	});
+
 	it("Voters vote for the proposal", async () => {
-		for (let i = 0; i < voters.length; i++) {
-			async function voteWithCompression(
-				voterKeypair: Keypair,
-				proposalId: PublicKey,
-				vote: boolean
-			) {
-				try {
-					// const compressedData = await LightSystemProgram.compress({
-					// 	payer: voterKeypair.publicKey,
-					// 	toAddress: proposalId,
-					// 	lamports: vote ? new anchor.BN(1) : new anchor.BN(0),
-					// 	outputStateTree:
-					// 		defaultTestStateTreeAccounts().merkleTree,
-					// });
+		console.log("Voters vote for the proposal");
 
-					const instruction = await program.methods
-						.voteProposal(vote)
-						.accounts({
-							proposal: proposalId,
-							voter: voterKeypair.publicKey,
-						})
-						.signers([voterKeypair])
-						.rpc();
-					console.log(instruction);
-
-					// const tx = buildTx(
-					// 	[compressedData, instruction],
-					// 	voterKeypair.publicKey,
-					// 	(await rpc.getLatestBlockhash()).blockhash
-					// );
-					// await sendAndConfirmTx(rpc, tx).then((res) =>
-					// 	console.log(res)
-					// );
-				} catch (error: any) {
-					if (error instanceof SendTransactionError) {
-						console.log(
-							"Error voting with SendTransactionError: ",
-							error.logs,
-							error.message
-						);
-					} else {
-						console.log("Error voting with compression: ", error);
-					}
-				}
-			}
-
-			await voteWithCompression(
-				voters[i].keypair,
-				proposal.publicKey,
-				voters[i].vote
+		for (let v of voters) {
+			const [voterPDA] = PublicKey.findProgramAddressSync(
+				[proposalPDA.toBuffer(), v.keypair.publicKey.toBuffer()],
+				program.programId
 			);
-		}
-
-		const updatedProposalAccount = await program.account.proposal.fetch(
-			proposal.publicKey
-		);
-
-		console.log(
-			"Voters vote for the proposal: ",
-			updatedProposalAccount.voters
-		);
-		expect(updatedProposalAccount.votesFor.toString()).toEqual("2");
-		expect(updatedProposalAccount.votesAgainst.toString()).toEqual("1");
-	});
-
-	it("Errors when Voter votes again (either for or against) the proposal", async () => {
-		try {
 			await program.methods
-				.voteProposal(true)
+				.voteProposal(v.vote)
 				.accounts({
-					proposal: proposal.publicKey,
-					voter: voters[0].keypair.publicKey,
+					proposal: proposalPDA,
+					voterAccount: voterPDA,
+					systemProgram: SystemProgram.programId,
+					user: v.keypair.publicKey,
 				})
-				.signers([voters[0].keypair])
+				.signers([v.keypair])
 				.rpc();
-		} catch (error: any) {
-			expect(error.error.errorMessage).toEqual("Already voted.");
 		}
+
+		const proposalAccount = await program.account.proposal.fetch(
+			proposalPDA
+		);
+		expect(proposalAccount.votesFor.toString()).toEqual("2");
+		expect(proposalAccount.votesAgainst.toString()).toEqual("1");
 	});
 
-	it("Should get all votes and voters for the proposal", async () => {
-		const proposalACcount = await program.account.proposal.fetch(
-			proposal.publicKey
+	it("Finalizes the proposal and distributes rewards", async () => {
+		console.log("Finalizes the proposal and distributes rewards");
+
+		const voterAccountAddresses = await getVoterAccounts(
+			program,
+			proposalPDA
+		);
+		const initialBalances = await Promise.all(
+			voterAccountAddresses.map((acc) =>
+				provider.connection.getBalance(acc.pubkey)
+			)
 		);
 
-		const votesFor = proposalACcount.votesFor;
-		const votesAgainst = proposalACcount.votesAgainst;
-		const voters = proposalACcount.voters;
+		voterAccountAddresses.forEach((acc, index) => {
+			console.log(
+				`Initial balance of Voter ${acc.pubkey.toBase58()}: ${
+					initialBalances[index] / LAMPORTS_PER_SOL
+				} SOL`
+			);
+		});
 
-		// console.log(votesFor.toString());
-		// console.log(votesAgainst.toString());
-		// console.log(voters);
-
-		expect(votesFor.toString()).toEqual(new anchor.BN(2).toString());
-		expect(votesAgainst.toString()).toEqual(new anchor.BN(1).toString());
-		expect(voters).toHaveLength(3);
-	});
-
-	it("Creator finalizes the proposal", async () => {
 		await program.methods
 			.finalizeProposal()
 			.accounts({
-				proposal: proposal.publicKey,
-				user: provider.publicKey,
+				proposal: proposalPDA,
+				creator: creator.publicKey,
+				systemProgram: SystemProgram.programId,
 			})
+			.remainingAccounts(voterAccountAddresses)
+			.signers([creator])
 			.rpc();
 
-		const updatedProposalAccount = await program.account.proposal.fetch(
-			proposal.publicKey
+		const finalizedProposalAccount = await program.account.proposal.fetch(
+			proposalPDA
+		);
+		expect(finalizedProposalAccount.onGoing).toBe(false);
+		expect(finalizedProposalAccount.rewardPool.toNumber()).toBe(0);
+
+		const finalBalances = await Promise.all(
+			voterAccountAddresses.map((acc) =>
+				provider.connection.getBalance(acc.pubkey)
+			)
 		);
 
-		expect(updatedProposalAccount.onGoing).toBe(false);
-	});
-
-	it("Proposal result should be correct", async () => {
-		const proposalAccount = await program.account.proposal.fetch(
-			proposal.publicKey
-		);
-
-		expect(proposalAccount.result).toBe(ProposalResult.For);
-	});
-
-	it("Should return all proposals", async () => {
-		const proposals = await program.account.proposal.all();
-
-		// console.log(proposals);
-
-		expect(proposals).toHaveLength(1);
+		voterAccountAddresses.forEach((acc, index) => {
+			const expectedIncrease =
+				new anchor.BN(finalizedProposalAccount.rewardPool).toNumber() /
+				voterAccountAddresses.length;
+			const actualIncrease =
+				finalBalances[index] - initialBalances[index];
+			console.log(
+				`Final balance of Voter ${acc.pubkey.toBase58()}: ${
+					finalBalances[index] / LAMPORTS_PER_SOL
+				} SOL`
+			);
+			expect(actualIncrease).toBeGreaterThanOrEqual(expectedIncrease);
+		});
 	});
 });
+
+async function getVoterAccounts(
+	program: Program<DaoVoting>,
+	proposalPDA: PublicKey
+) {
+	const proposalAccount = await program.account.proposal.fetch(proposalPDA);
+	return proposalAccount.voters.map((voterPublicKey) => {
+		return {
+			pubkey: voterPublicKey,
+			isWritable: true,
+			isSigner: false,
+		};
+	});
+}

@@ -1,21 +1,19 @@
 use crate::{errors::ProposalErrorCode, state::proposal::Proposal};
-use anchor_lang::prelude::*;
+use anchor_lang::{prelude::*, solana_program::system_instruction};
 
 pub fn create_proposal_instruction(
     ctx: Context<CreateProposal>,
     description: String,
-    deposit: u64,
+    initial_reward: u64,
 ) -> Result<()> {
     require!(
         !description.is_empty(),
         ProposalErrorCode::DescriptionRequired
     );
-    require!(
-        description.len() <= 500,
-        ProposalErrorCode::DescriptionTooLong
-    );
 
     msg!("Creating proposal with description: {}", description);
+
+    let proposal_ctx = &mut ctx.accounts.proposal.clone();
 
     let proposal = &mut ctx.accounts.proposal;
     proposal.creator = *ctx.accounts.user.key;
@@ -24,14 +22,22 @@ pub fn create_proposal_instruction(
     proposal.votes_against = 0;
     proposal.on_going = true;
 
-    **proposal.to_account_info().try_borrow_mut_lamports()? += deposit;
-    **ctx
-        .accounts
-        .user
-        .to_account_info()
-        .try_borrow_mut_lamports()? -= deposit;
+    let transfer_instruction = system_instruction::transfer(
+        ctx.accounts.user.to_account_info().key,
+        proposal_ctx.to_account_info().key,
+        initial_reward,
+    );
 
-    // ctx.accounts.proposal = proposal.clone();
+    anchor_lang::solana_program::program::invoke(
+        &transfer_instruction,
+        &[
+            ctx.accounts.user.to_account_info(),
+            proposal_ctx.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+        ],
+    )?;
+
+    proposal.reward_pool = initial_reward;
 
     Ok(())
 }
@@ -42,8 +48,8 @@ pub struct CreateProposal<'info> {
         init_if_needed,
         payer = user,
         space = 8 + Proposal::INIT_SPACE,
-        // seeds = [b"proposal".as_ref()],
-        // bump
+        seeds = [b"proposal", user.key().as_ref()],
+        bump
     )]
     pub proposal: Account<'info, Proposal>,
     #[account(mut)]

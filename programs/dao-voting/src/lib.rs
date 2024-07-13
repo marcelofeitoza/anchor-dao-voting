@@ -15,9 +15,9 @@ pub mod dao_voting {
     pub fn create_proposal(
         ctx: Context<CreateProposal>,
         description: String,
-        deposit: u64,
+        initial_reward: u64,
     ) -> Result<()> {
-        create_proposal_instruction(ctx, description, deposit)
+        create_proposal_instruction(ctx, description, initial_reward)
     }
     pub fn finalize_proposal(ctx: Context<Finalize>) -> Result<()> {
         finalize_proposal_instruction(ctx)

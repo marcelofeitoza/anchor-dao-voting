@@ -1,41 +1,34 @@
-use crate::{
-    errors::ProposalErrorCode,
-    state::proposal::{Proposal, ProposalResult},
-};
+use crate::{errors::ProposalErrorCode, state::proposal::Proposal};
 use anchor_lang::prelude::*;
 
 pub fn finalize_proposal_instruction(ctx: Context<Finalize>) -> Result<()> {
     let proposal = &mut ctx.accounts.proposal;
+
     require!(proposal.on_going, ProposalErrorCode::ProposalFinalized);
-    require!(
-        proposal.creator == *ctx.accounts.user.key,
-        ProposalErrorCode::OnlyCreatorCanFinalize
-    );
+    let voters = ctx.remaining_accounts;
+    let num_voters = voters.len() as u64;
+    require!(num_voters > 0, ProposalErrorCode::NoVoters);
 
-    let votes_for = proposal.votes_for;
-    let votes_against = proposal.votes_against;
-    match votes_for.cmp(&votes_against) {
-        std::cmp::Ordering::Greater => proposal.set_result_enum(ProposalResult::For),
-        std::cmp::Ordering::Less => proposal.set_result_enum(ProposalResult::Against),
-        std::cmp::Ordering::Equal => proposal.set_result_enum(ProposalResult::Tie),
+    let share = proposal
+        .clone()
+        .reward_pool
+        .checked_div(num_voters)
+        .ok_or(ProposalErrorCode::RewardDivisionError)?;
+
+    for voter_acc_info in voters {
+        let voter_acc: AccountInfo = voter_acc_info.to_account_info();
+        **voter_acc.try_borrow_mut_lamports()? = voter_acc
+            .lamports()
+            .checked_add(share)
+            .ok_or(ProposalErrorCode::Overflow)?;
+        **proposal.to_account_info().try_borrow_mut_lamports()? = proposal
+            .to_account_info()
+            .lamports()
+            .checked_sub(share)
+            .ok_or(ProposalErrorCode::Overflow)?;
     }
 
-    if proposal.voters.is_empty() {
-        return Ok(());
-    }
-
-    let reward_per_voter = proposal.reward_pool / proposal.voters.len() as u64;
-    for voter_pubkey in &proposal.voters {
-        let voter_account = ctx
-            .remaining_accounts
-            .iter()
-            .find(|account| account.key == voter_pubkey)
-            .ok_or(ProposalErrorCode::InvalidVoterAccount)?;
-
-        **voter_account.try_borrow_mut_lamports()? += reward_per_voter;
-        **proposal.to_account_info().try_borrow_mut_lamports()? -= reward_per_voter;
-    }
-
+    proposal.reward_pool = 0;
     proposal.on_going = false;
 
     Ok(())
@@ -43,7 +36,8 @@ pub fn finalize_proposal_instruction(ctx: Context<Finalize>) -> Result<()> {
 
 #[derive(Accounts)]
 pub struct Finalize<'info> {
-    #[account(mut)]
+    #[account(mut, has_one = creator)]
     pub proposal: Account<'info, Proposal>,
-    pub user: Signer<'info>,
+    pub creator: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }

@@ -12,8 +12,8 @@ pub struct Proposal {
     pub on_going: bool,
     #[max_len(256)]
     pub voters: Vec<Pubkey>,
-    pub reward_pool: u64,
     pub result: Option<u8>,
+    pub reward_pool: u64,
 }
 
 impl Proposal {
