@@ -23,7 +23,7 @@ The development of the DAO Voting program encompasses several core functionaliti
     -   Creators can finalize proposals to distribute rewards.
         -   Rewards are distributed proportionally among voters based on the number of votes (For a reward pool of 100 SOL, if 10 users vote, each user receives 10 SOL).
         -   The system calculates the result of the voting, displaying detailed results including the total votes for each option and their respective percentages.
--   **Optionally, Add Privacy Voting Using ZK Proofs or Verifiable Compute:** ❌
+-   **Optionally, Add Privacy Voting Using ZK Proofs or Verifiable Compute:** 🔜
 -   **Reward Points to Users for Voting Participation:** ✅
     -   Rewards are distributed to voters based on their participation, with rewards being proportional to the number of votes.
 

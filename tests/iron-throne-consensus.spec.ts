@@ -52,7 +52,7 @@ describe("iron-throne-consensus", () => {
 			await provider.connection.confirmTransaction(
 				await provider.connection.requestAirdrop(
 					v.keypair.publicKey,
-					2 * LAMPORTS_PER_SOL
+					10_000_000
 				),
 				"confirmed"
 			);
@@ -215,22 +215,22 @@ Reward Pool: ${proposalAccount.rewardPool / LAMPORTS_PER_SOL} SOL
 		expect(finalizedProposalAccount.result).toBe(ProposalResult.For);
 
 		console.log(`Finalizes the proposal and distributes rewards:\n
-Finalized Proposal Description: ${finalizedProposalAccount.description}	
-Total Votes For: ${finalizedProposalAccount.votesFor}
-Total Votes Against: ${finalizedProposalAccount.votesAgainst}
-Votes For Percentage: ${finalizedProposalAccount.votesForPercentage?.toFixed(
-			2
-		)}%
-Votes Against Percentage: ${finalizedProposalAccount.votesAgainstPercentage?.toFixed(
-			2
-		)}%
-Result: ${
-			finalizedProposalAccount.result === ProposalResult.For
-				? "For"
-				: finalizedProposalAccount.result === ProposalResult.Against
-				? "Against"
-				: "Tie"
-		}
+Proposal Description: ${finalizedProposalAccount.description}
+Reward Pool: ${finalizedProposalAccount.rewardPool / LAMPORTS_PER_SOL} SOL
+Voters balances before finalization: [\n${voterAccountAddresses
+			.map((acc, index) => {
+				return `\t${acc.pubkey}: ${
+					initialBalances[index] / LAMPORTS_PER_SOL
+				} SOL`;
+			})
+			.join("\n")}\n]
+Voters balances after finalization: [\n${voterAccountAddresses
+			.map((acc, index) => {
+				return `\t${acc.pubkey}: ${
+					finalBalances[index] / LAMPORTS_PER_SOL
+				} SOL`;
+			})
+			.join("\n")}\n]
 		`);
 	});
 
@@ -258,6 +258,14 @@ Total Votes For: ${proposalAccount.votesFor}
 Total Votes Against: ${proposalAccount.votesAgainst}
 Votes For Percentage: ${proposalAccount.votesForPercentage?.toFixed(2)}%
 Votes Against Percentage: ${proposalAccount.votesAgainstPercentage?.toFixed(2)}%
+Voters: [\n${voters
+			.map(
+				(v) =>
+					`\t${v.vote ? "For" : "Against"}: ${v.keypair.publicKey} (${
+						v.voter
+					})`
+			)
+			.join("\n")}\n]
 Result: ${resultString}
 		`);
 	});
