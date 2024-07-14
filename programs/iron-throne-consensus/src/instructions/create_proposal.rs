@@ -4,7 +4,7 @@ use anchor_lang::{prelude::*, solana_program::system_instruction};
 pub fn create_proposal_instruction(
     ctx: Context<CreateProposal>,
     description: String,
-    initial_reward: u64,
+    reward: u64,
 ) -> Result<()> {
     require!(
         !description.is_empty(),
@@ -22,22 +22,24 @@ pub fn create_proposal_instruction(
     proposal.votes_against = 0;
     proposal.on_going = true;
 
-    let transfer_instruction = system_instruction::transfer(
-        ctx.accounts.user.to_account_info().key,
-        proposal_ctx.to_account_info().key,
-        initial_reward,
-    );
+    if reward > 0 {
+        let transfer_instruction = system_instruction::transfer(
+            ctx.accounts.user.to_account_info().key,
+            proposal_ctx.to_account_info().key,
+            reward,
+        );
 
-    anchor_lang::solana_program::program::invoke(
-        &transfer_instruction,
-        &[
-            ctx.accounts.user.to_account_info(),
-            proposal_ctx.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-    )?;
+        anchor_lang::solana_program::program::invoke(
+            &transfer_instruction,
+            &[
+                ctx.accounts.user.to_account_info(),
+                proposal_ctx.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+    }
 
-    proposal.reward_pool = initial_reward;
+    proposal.reward_pool = reward;
 
     Ok(())
 }

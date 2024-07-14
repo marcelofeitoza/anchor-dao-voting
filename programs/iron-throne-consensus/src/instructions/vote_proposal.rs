@@ -18,7 +18,6 @@ pub fn vote_proposal_instruction(ctx: Context<Vote>, vote: bool) -> Result<()> {
         proposal.votes_against += 1;
     }
 
-    // proposal.voters.push(voter_account.key());
     proposal.voters.push(*ctx.accounts.user.key);
 
     Ok(())

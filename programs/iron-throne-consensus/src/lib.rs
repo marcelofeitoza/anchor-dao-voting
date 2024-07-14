@@ -15,13 +15,15 @@ pub mod iron_throne_consensus {
     pub fn create_proposal(
         ctx: Context<CreateProposal>,
         description: String,
-        initial_reward: u64,
+        reward: u64,
     ) -> Result<()> {
-        create_proposal_instruction(ctx, description, initial_reward)
+        create_proposal_instruction(ctx, description, reward)
     }
+
     pub fn finalize_proposal(ctx: Context<Finalize>) -> Result<()> {
         finalize_proposal_instruction(ctx)
     }
+
     pub fn vote_proposal(ctx: Context<Vote>, vote: bool) -> Result<()> {
         vote_proposal_instruction(ctx, vote)
     }
