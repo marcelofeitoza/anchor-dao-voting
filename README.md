@@ -27,17 +27,6 @@ The development of the DAO Voting program encompasses several core functionaliti
 -   **Reward Points to Users for Voting Participation:** ✅
     -   Rewards are distributed to voters based on their participation, with rewards being proportional to the number of votes.
 
-<!-- ## Features
-
--   **Create Proposals**: Users can create proposals with a specified reward pool in SOL.
--   **Vote on Proposals**: Allows users to vote on active proposals.
--   **Reward Distribution**: After a proposal is finalized, rewards are distributed proportionally among voters based on the number of votes.
--   **Display Results**: After finalization, the system provides detailed results including:
-    -   Whether the voting is ongoing or has ended.
-    -   Total votes for and against the proposal.
-    -   Percentage of votes for and against.
-    -   Final result of the voting (Passed or Failed). -->
-
 ## Getting Started
 
 ### Prerequisites
